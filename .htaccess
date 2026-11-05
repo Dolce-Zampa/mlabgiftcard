@@ -1,0 +1,7 @@
+# The module is reached through PrestaShop's index.php, never by executing its files directly.
+<IfModule mod_authz_core.c>
+  Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+  Deny from all
+</IfModule>

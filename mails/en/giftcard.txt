@@ -1,0 +1,12 @@
+Your Gift Card
+
+Hello {recipient_name},
+You received a gift card for {shop_name}.
+
+Value: {gift_card_amount}
+Code: {gift_card_code}
+Valid until: {gift_card_expiry}
+
+The balance can be used across multiple purchases. Keep the code private: it grants access to the credit. Claiming it in your account restricts its use to that customer.
+
+{shop_url}

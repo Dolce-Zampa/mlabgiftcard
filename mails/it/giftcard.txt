@@ -1,0 +1,12 @@
+La tua Gift Card
+
+Ciao {recipient_name},
+Hai ricevuto una gift card da utilizzare su {shop_name}.
+
+Valore: {gift_card_amount}
+Codice: {gift_card_code}
+Validità: {gift_card_expiry}
+
+Puoi usare il credito in più acquisti fino a esaurimento. Conserva il codice: consente di utilizzare il saldo. Se lo associ al tuo account, il credito sarà riservato a quel cliente.
+
+{shop_url}
