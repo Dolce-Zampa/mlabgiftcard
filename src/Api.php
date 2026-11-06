@@ -17,6 +17,18 @@ final class Api
     public function __construct(private readonly Storage $db, private readonly Crypto $crypto, private readonly int $shopId,
         private readonly Service $service, private readonly Platform $platform) {}
 
+    /** Remove body credentials before payloads can reach the service or idempotency storage. */
+    public static function extractCredential(array $server, string $method, array &$data): string
+    {
+        $bodyToken = $data['api_key'] ?? null;
+        unset($data['api_key']);
+        $authorization = (string) ($server['HTTP_AUTHORIZATION'] ?? $server['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        if ($authorization !== '') {
+            return preg_match('/^Bearer (gc_api_[a-f0-9]{64})$/D', $authorization, $match) ? $match[1] : '';
+        }
+        return $method === 'POST' && is_string($bodyToken) ? $bodyToken : '';
+    }
+
     public function dispatch(string $action, string $method, array $data, string $token, string $requestKey): array
     {
         $account = $this->authenticate($token);

@@ -14,8 +14,12 @@ class AdminMlabGiftCardController extends ModuleAdminController
             return;
         }
 
-        Tools::redirectAdmin($this->context->link->getAdminLink('AdminModules', true, [], [
+        $url = $this->context->link->getAdminLink('AdminModules', true, [], [
             'configure' => $this->module->name,
-        ]));
+        ]);
+        // redirectAdmin() makes relative URLs absolute using the configured shop
+        // protocol, which can downgrade an HTTPS back-office request to HTTP.
+        header('Location: ' . \Mlab\GiftCard\Admin::relativeAdminUrl($url));
+        exit;
     }
 }

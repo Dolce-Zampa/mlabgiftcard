@@ -24,8 +24,6 @@ class mlabgiftcardapiModuleFrontController extends ModuleFrontController
             }
             $runtime = $this->module->runtime();
             $runtime['api']->rateLimit('api:' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
-            $authorization = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
-            $token = preg_match('/^Bearer (gc_api_[a-f0-9]{64})$/D', $authorization, $match) ? $match[1] : '';
             $action = Tools::getValue('action', '');
             if (!is_string($action)) {
                 throw new \Mlab\GiftCard\GiftCardException('invalid_action', 'Invalid API action.', 400);
@@ -46,6 +44,7 @@ class mlabgiftcardapiModuleFrontController extends ModuleFrontController
                     throw new \Mlab\GiftCard\GiftCardException('invalid_json', 'Request body must be a JSON object.', 400);
                 }
             }
+            $token = \Mlab\GiftCard\Api::extractCredential($_SERVER, $method, $data);
             $result = $runtime['api']->dispatch($action, $method, $data, $token, (string) ($_SERVER['HTTP_IDEMPOTENCY_KEY'] ?? ''));
             if ($action === 'maintenance') {
                 $result['emails_sent'] = $runtime['delivery']->sendBatch();

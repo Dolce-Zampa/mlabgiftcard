@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <phpunit bootstrap="bootstrap.php" colors="true" cacheDirectory="/tmp/mlabgiftcard-phpunit-cache">
-  <testsuites><testsuite name="MLab Gift Card"><file>GiftCardTest.php</file><file>CoreIntegrationTest.php</file></testsuite></testsuites>
+  <testsuites><testsuite name="MLab Gift Card"><file>GiftCardTest.php</file><file>CoreIntegrationTest.php</file><file>AdminUrlTest.php</file><file>ApiCredentialsTest.php</file><file>AdminCsrfTest.php</file></testsuite></testsuites>
 </phpunit>

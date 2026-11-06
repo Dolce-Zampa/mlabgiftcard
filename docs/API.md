@@ -8,6 +8,8 @@ https://shop.example/index.php?fc=module&module=mlabgiftcard&controller=api
 
 Ogni operazione seleziona `action` nella query string. Autenticazione: `Authorization: Bearer gc_api_...`; le scritture usano JSON e una chiave `Idempotency-Key` da 8–128 caratteri ASCII alfanumerici o `._:/-`. Riutilizzare **stessa chiave, stesso payload e stessa credenziale** per un retry. Salvare chiave e payload nel BE prima della chiamata. Le chiavi sono specifiche del negozio selezionato dal dominio/URL PrestaShop.
 
+Se il server non inoltra l'header `Authorization`, le sole richieste POST possono inviare la chiave nel campo JSON `api_key`. Il campo viene rimosso prima dell'elaborazione e del calcolo dell'idempotenza. Se l'header è presente, ha precedenza; le richieste GET continuano a richiedere l'header. Non inserire la chiave nell'URL.
+
 Le risposte hanno forma `{"success":true,"data":{...}}`; errori `{"success":false,"error":{"code":"...","message":"..."}}`. Importi sempre interi in centesimi, valuta ISO maiuscola e timestamp UTC `YYYY-MM-DDTHH:MM:SSZ`. Le date nel ledger grezzo sono SQL UTC. Nessuna conversione di valuta. Gli ID di card/prenotazione sono stringhe esadecimali da 32 caratteri.
 
 ## Operazioni
