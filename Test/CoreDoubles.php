@@ -46,7 +46,7 @@ class Order
 }
 class OrderState
 {
-    public $id = 0, $paid = false;
+    public $id = 0, $paid = false, $logable = false, $invoice = false;
     public function __construct($id) { $this->id = $id; $this->paid = (int) $id === 2; }
 }
 class PrestaShopLogger { public static array $messages = []; public static function addLog($message, $level) { self::$messages[] = $message; } }

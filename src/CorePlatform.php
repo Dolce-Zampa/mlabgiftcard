@@ -44,7 +44,7 @@ final class CorePlatform implements Platform
         }
     }
 
-    public function order(int $id, array $reservation, string $currency): void
+    public function order(int $id, array $reservation, string $currency, ?int $pendingStateId = null): void
     {
         $order = new \Order($id);
         if (!\Validate::isLoadedObject($order) || (int) $order->id_shop !== $this->shopId
@@ -55,7 +55,13 @@ final class CorePlatform implements Platform
             throw new GiftCardException('order_mismatch', 'Order does not match the reservation.', 409);
         }
         $state = new \OrderState((int) $order->current_state);
-        if (!\Validate::isLoadedObject($state) || !$state->paid) {
+        $outOfStockPending = (int) \Configuration::get('PS_OS_OUTOFSTOCK_UNPAID');
+        $protectedPending = \Validate::isLoadedObject($state) && $pendingStateId !== null && $pendingStateId > 0
+            && ((int) $order->current_state === $pendingStateId
+                || ($outOfStockPending > 0 && (int) $order->current_state === $outOfStockPending))
+            && !empty($reservation['payment_confirmed_at'])
+            && !$state->paid && !$state->logable && !$state->invoice;
+        if (!\Validate::isLoadedObject($state) || (!$state->paid && !$protectedPending)) {
             throw new GiftCardException('order_unpaid', 'The order must be confirmed as paid before capture.', 409);
         }
         foreach ($order->getProducts() as $line) {

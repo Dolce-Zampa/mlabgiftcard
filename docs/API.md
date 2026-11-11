@@ -12,6 +12,8 @@ Se il server non inoltra l'header `Authorization`, le sole richieste POST posson
 
 Le risposte hanno forma `{"success":true,"data":{...}}`; errori `{"success":false,"error":{"code":"...","message":"..."}}`. Importi sempre interi in centesimi, valuta ISO maiuscola e timestamp UTC `YYYY-MM-DDTHH:MM:SSZ`. Le date nel ledger grezzo sono SQL UTC. Nessuna conversione di valuta. Gli ID di card/prenotazione sono stringhe esadecimali da 32 caratteri.
 
+I codici hanno il formato `GC-8DUE-28DF`, con otto caratteri casuali e senza `0`, `O`, `1` e `I`. Si possono inserire anche in minuscolo, senza trattini e senza il prefisso `GC`. Gli altri formati non vengono accettati.
+
 ## Operazioni
 
 | action | Metodo | Scope | Parametri |
@@ -24,8 +26,9 @@ Le risposte hanno forma `{"success":true,"data":{...}}`; errori `{"success":fals
 | create | POST | issue | `amount_cents`, `currency`, `source_reference`; opzionali: `status` (pending predefinito oppure active), `customer_id`, `recipient_email`, `recipient_name`, `expires_at` oppure `validity_days` |
 | activate | POST | issue | `card_id`, `payment_reference` verificato dal BE |
 | assign | POST | manage | `card_id` oppure `code`, `customer_id`; associazione permanente, senza prenotazioni aperte |
-| reserve | POST | spend | `code`, `cart_id`, `customer_id?`, `currency`, `amount_cents`, `allow_partial?` (true), `ttl_seconds?` (7200, intervallo 60–604800) |
-| capture | POST | spend | `reservation_id`, `order_id` di un ordine pagato che corrisponda alla prenotazione |
+| reserve | POST | spend | `code`, `cart_id`, `customer_id?`, `currency`, `amount_cents`, `allow_partial?` (true), `minimum_remainder_cents?` (0), `ttl_seconds?` (7200, intervallo 60–604800) |
+| protect | POST | spend | `reservation_id`; impedisce la scadenza dopo la verifica del pagamento, fino alla cattura |
+| capture | POST | spend | `reservation_id`, `order_id` di un ordine pagato; per un ordine in attesa protetto, `pending_state_id` |
 | redeem | POST | spend | `code`, `cart_id`, `customer_id?`, `currency`, `amount_cents`, `order_id`; riscatto esatto atomico per ordine già pagato |
 | release | POST | spend | `reservation_id`, `reason` |
 | refund | POST | manage | `reservation_id`, `amount_cents`, `refund_reference`, `reason` |
@@ -37,6 +40,8 @@ Le risposte hanno forma `{"success":true,"data":{...}}`; errori `{"success":fals
 
 `source_reference` identifica un’emissione (`purchase:123:line:1`) e deve essere univoco; ammette lettere, cifre e `._:/-`, massimo 160 caratteri. Il valore massimo per saldo/importo è 2.000.000.000 centesimi. `validity_days` (0–36500) conta dalla creazione; zero equivale a nessuna scadenza. Per una card pending scegliere una data esplicita oppure creare la card dopo il pagamento. `create` restituisce anche il codice completo: conservarlo solo quanto necessario e non inserirlo nei log. Le successive letture restituiscono soltanto il suffisso mascherabile.
 
+Con `minimum_remainder_cents`, se la gift card non copre l’intero ordine, il modulo riduce la quota prenotata per lasciare almeno quel residuo; se non è possibile, restituisce `payment_too_small`. Una nuova richiesta equivalente per lo stesso carrello può riutilizzare la prenotazione ancora valida.
+
 Le API sono per chiamate fidate server-to-server. Il BE verifica l’identità del suo utente prima di usare `customer_id`: l’API key autorizza il servizio e non autentica il cliente finale. Un codice assegnato richiede sempre il relativo `customer_id` per lookup/riscatto; un guest può spendere soltanto una card al portatore. I clienti condivisi fra negozi richiedono l’ID del negozio proprietario del cliente: il modulo mantiene isolamento stretto per shop.
 
 ## Esempio checkout parziale
@@ -46,7 +51,7 @@ curl --request POST "$GIFT_CARD_API_URL&action=reserve" \
   --header "Authorization: Bearer $GIFT_CARD_API_KEY" \
   --header 'Content-Type: application/json' \
   --header 'Idempotency-Key: checkout:cart:123:attempt:1' \
-  --data '{"code":"GC-00000000-00000000-00000000-00000000","cart_id":123,"customer_id":42,"amount_cents":7500,"currency":"EUR","ttl_seconds":7200}'
+  --data '{"code":"GC-8DUE-28DF","cart_id":123,"customer_id":42,"amount_cents":7500,"currency":"EUR","ttl_seconds":7200}'
 ```
 
 Con card da 50 euro e ordine da 75 euro, la prenotazione restituisce `reservation.amount_cents=5000`, `card.balance_cents=5000`, `card.reserved_cents=5000`, `card.available_cents=0`. Il BE incassa 2500 centesimi con Stripe. Dopo la creazione dell’ordine pagato:
@@ -58,6 +63,8 @@ Con card da 50 euro e ordine da 75 euro, la prenotazione restituisce `reservatio
 Va inviato a `POST ...&action=capture` con una nuova chiave idempotente stabile. Lo snapshot distingue il totale ordine dal solo residuo incassato con Stripe. Per un ordine da 30 euro interamente coperto da una card da 50, il BE crea l’ordine con pagamento Gift Card, poi cattura 3000: la card conserva 2000 centesimi.
 
 In caso di crash dopo la creazione dell’ordine, ripetere `capture`. Se la prenotazione è stata già catturata sullo stesso ordine, viene restituito il risultato senza un altro addebito. Se è stata rilasciata o scaduta, la cattura restituisce 409: il BE deve gestire il pagamento tardivo senza forzare un nuovo addebito automatico.
+
+`protect` deve essere chiamato solo dal backend fidato dopo aver verificato il pagamento esterno, o quando la gift card copre interamente il totale. Una prenotazione protetta non viene rilasciata dalla manutenzione e non può essere annullata con `release`: eventuali anomalie richiedono riconciliazione. `pending_state_id` è ammesso solo per una prenotazione protetta e uno stato d'ordine non pagato, non fatturabile e non logabile.
 
 ## Job
 

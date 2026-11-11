@@ -33,8 +33,8 @@ final class Schema
                 UNIQUE KEY movement_source (id_shop,reservation_id,type,reference)",
             'reservations' => "
                 id CHAR(32) NOT NULL PRIMARY KEY, id_shop INT UNSIGNED NOT NULL, card_id CHAR(32) NOT NULL,
-                cart_id INT UNSIGNED NOT NULL, active_cart_id INT UNSIGNED NULL, customer_id INT UNSIGNED NULL, amount_cents BIGINT NOT NULL,
-                refunded_cents BIGINT NOT NULL DEFAULT 0, status VARCHAR(12) NOT NULL,
+                cart_id INT UNSIGNED NOT NULL, active_cart_id INT UNSIGNED NULL, customer_id INT UNSIGNED NULL, amount_cents BIGINT NOT NULL, requested_cents BIGINT NULL,
+                refunded_cents BIGINT NOT NULL DEFAULT 0, status VARCHAR(12) NOT NULL, payment_confirmed_at DATETIME NULL,
                 order_id INT UNSIGNED NULL, expires_at DATETIME NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL,
                 KEY card_holds (id_shop, card_id, status), KEY due_holds (id_shop, status, expires_at),
                 UNIQUE KEY order_redemptions (id_shop, order_id), UNIQUE KEY active_cart (id_shop,active_cart_id)",

@@ -14,7 +14,7 @@ final class GiftCardTestPlatform implements Platform
     public function customer(?int $id): void {}
     public function currency(string $iso): void {}
     public function cart(int $id, ?int $customerId, string $currency, int $amount): void {}
-    public function order(int $id, array $reservation, string $currency): void
+    public function order(int $id, array $reservation, string $currency, ?int $pendingStateId = null): void
     {
         if ($this->rejectOrder) {
             throw new GiftCardException('order_mismatch', 'Mismatched order', 409);
@@ -85,6 +85,27 @@ final class GiftCardTest extends TestCase
         $this->assertLedger($card['card']['id']);
     }
 
+    public function testRetryReusesAnEquivalentCartReservationWithoutReservingTwice(): void
+    {
+        $card = $this->card();
+        $request = $this->hold($card, 12000);
+        $first = $this->operate('reserve', $request);
+        $again = $this->operate('reserve', $request);
+        $this->assertSame($first['reservation']['id'], $again['reservation']['id']);
+        $this->assertSame(10000, $again['card']['reserved_cents']);
+        $request['amount_cents'] = 9000;
+        $this->fails('cart_reserved', fn() => $this->operate('reserve', $request));
+        $this->assertLedger($card['card']['id']);
+    }
+
+    public function testPartialPaymentRespectsTheMinimumStripeAmount(): void
+    {
+        $card = $this->card(['amount_cents' => 980]);
+        $held = $this->operate('reserve', $this->hold($card, 1000) + ['minimum_remainder_cents' => 50]);
+        $this->assertSame(950, $held['reservation']['amount_cents']);
+        $this->assertSame(30, $held['card']['available_cents']);
+    }
+
     public function testTwoPhaseReleaseAndExpirationNeverSpendMoney(): void
     {
         $card = $this->card();
@@ -96,6 +117,22 @@ final class GiftCardTest extends TestCase
         $this->assertSame(1, $this->service->expireReservations());
         $this->fails('reservation_conflict', fn() => $this->operate('capture', ['reservation_id' => $held['reservation']['id'], 'order_id' => 21]));
         $this->assertSame(10000, $this->service->card($card['card']['id'])['balance_cents']);
+        $this->assertLedger($card['card']['id']);
+    }
+
+    public function testConfirmedPaymentProtectsHoldFromExpirationUntilCapture(): void
+    {
+        $card = $this->card();
+        $held = $this->operate('reserve', $this->hold($card, 4000) + ['ttl_seconds' => 60]);
+        $reservationId = $held['reservation']['id'];
+        $protected = $this->operate('protect', ['reservation_id' => $reservationId], 'confirmed-payment-key');
+        $this->assertNotNull($protected['reservation']['payment_confirmed_at']);
+        $this->now += 61;
+        $this->assertSame(0, $this->service->expireReservations());
+        $this->fails('reservation_conflict', fn() => $this->operate('release', ['reservation_id' => $reservationId, 'reason' => 'abandoned']));
+        $captured = $this->operate('capture', ['reservation_id' => $reservationId, 'order_id' => 21]);
+        $this->assertSame(6000, $captured['card']['balance_cents']);
+        $this->assertSame(0, $captured['card']['reserved_cents']);
         $this->assertLedger($card['card']['id']);
     }
 
