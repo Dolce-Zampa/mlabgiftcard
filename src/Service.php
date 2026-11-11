@@ -73,6 +73,7 @@ final class Service
                 'activate' => $this->activate($data, $actor),
                 'assign' => $this->assign($data, $actor),
                 'reserve' => $this->reserve($data, $actor),
+                'protect' => $this->protect($data, $actor),
                 'redeem' => $this->redeem($data, $actor),
                 'capture' => $this->capture($data, $actor),
                 'release' => $this->release($data, $actor),
@@ -139,7 +140,7 @@ final class Service
     public function expireReservations(int $limit = 100): int
     {
         $rows = $this->db->rows('SELECT id,card_id FROM ' . $this->db->table('reservations') . ' WHERE id_shop='
-            . $this->shopId . " AND status='held' AND expires_at<=" . $this->db->quote($this->now())
+            . $this->shopId . " AND status='held' AND payment_confirmed_at IS NULL AND expires_at<=" . $this->db->quote($this->now())
             . ' ORDER BY expires_at LIMIT ' . self::integer($limit, 'limit', 1, 500));
         foreach ($rows as $row) {
             $this->execute('expire', ['card_id' => $row['card_id']], 'expiry:' . $row['id'], 'maintenance');
@@ -241,33 +242,60 @@ final class Service
             throw new GiftCardException('currency_mismatch', 'Gift card currency does not match the cart.');
         }
         $requested = self::integer($data['amount_cents'] ?? null, 'amount_cents');
-        $available = (int) $card['balance_cents'] - (int) $card['reserved_cents'];
+        $minimumRemainder = self::integer($data['minimum_remainder_cents'] ?? 0, 'minimum_remainder_cents', 0);
         $partial = $data['allow_partial'] ?? true;
         if (!is_bool($partial)) {
             throw new GiftCardException('invalid_input', 'allow_partial must be boolean.');
         }
+        $cartId = self::integer($data['cart_id'] ?? null, 'cart_id');
+        $ttl = self::integer($data['ttl_seconds'] ?? 7200, 'ttl_seconds', 60, 604800);
+        $existing = $this->db->row('SELECT * FROM ' . $this->db->table('reservations') . ' WHERE id_shop='
+            . $this->shopId . ' AND active_cart_id=' . $cartId . ' FOR UPDATE');
+        if ($existing !== null) {
+            if ($existing['card_id'] === $card['id'] && $this->nullableInt($existing['customer_id']) === $customer
+                && (int) $existing['requested_cents'] === $requested && $existing['payment_confirmed_at'] === null
+                && $existing['status'] === 'held' && $existing['expires_at'] > $this->now()
+                && ($partial || (int) $existing['amount_cents'] === $requested)
+                && ($requested === (int) $existing['amount_cents'] || $requested - (int) $existing['amount_cents'] >= $minimumRemainder)) {
+                return ['reservation' => $this->reservationView($existing), 'card' => $this->view($card)];
+            }
+            throw new GiftCardException('cart_reserved', 'This cart already has a reservation; reuse or release it.', 409);
+        }
+        $available = (int) $card['balance_cents'] - (int) $card['reserved_cents'];
         if ($available <= 0 || (!$partial && $available < $requested)) {
             throw new GiftCardException('insufficient_balance', 'Insufficient available gift card balance.', 409);
         }
         $amount = min($requested, $available);
-        $cartId = self::integer($data['cart_id'] ?? null, 'cart_id');
-        if ($this->db->row('SELECT id FROM ' . $this->db->table('reservations') . ' WHERE id_shop='
-            . $this->shopId . ' AND active_cart_id=' . $cartId) !== null) {
-            throw new GiftCardException('cart_reserved', 'This cart already has a reservation; reuse or release it.', 409);
+        if ($requested > $amount && $requested - $amount < $minimumRemainder) {
+            $amount = $requested - $minimumRemainder;
+            if ($amount < 1) {
+                throw new GiftCardException('payment_too_small', 'The remaining payment is below the minimum amount.', 409);
+            }
         }
-        $ttl = self::integer($data['ttl_seconds'] ?? 7200, 'ttl_seconds', 60, 604800);
         $expires = gmdate('Y-m-d H:i:s', ($this->clock)() + $ttl);
-        if ($card['expires_at'] !== null && $expires > $card['expires_at']) {
-            $expires = $card['expires_at'];
-        }
         $reservation = [
             'id' => bin2hex(random_bytes(16)), 'id_shop' => $this->shopId, 'card_id' => $card['id'],
             'cart_id' => $cartId, 'active_cart_id' => $cartId, 'customer_id' => $customer,
-            'amount_cents' => $amount, 'refunded_cents' => 0, 'status' => 'held', 'order_id' => null,
+            'amount_cents' => $amount, 'requested_cents' => $requested, 'refunded_cents' => 0, 'status' => 'held', 'order_id' => null,
+            'payment_confirmed_at' => null,
             'expires_at' => $expires, 'created_at' => $this->now(), 'updated_at' => $this->now(),
         ];
         $this->db->insert('reservations', $reservation);
         $card = $this->move($card, 'reserved', 0, $amount, $actor, 'Checkout reservation', null, $reservation['id']);
+        return ['reservation' => $this->reservationView($reservation), 'card' => $this->view($card)];
+    }
+
+    /** Keep the hold until settlement once the trusted checkout has verified payment. */
+    private function protect(array $data, string $actor): array
+    {
+        [$card, $reservation] = $this->lockedReservation($data);
+        if ($reservation['status'] !== 'held') {
+            throw new GiftCardException('reservation_conflict', 'Reservation is no longer available.', 409);
+        }
+        if ($reservation['payment_confirmed_at'] === null) {
+            $reservation['payment_confirmed_at'] = $this->now();
+            $this->saveReservation($reservation);
+        }
         return ['reservation' => $this->reservationView($reservation), 'card' => $this->view($card)];
     }
 
@@ -278,13 +306,15 @@ final class Service
         if ($reservation['status'] === 'captured' && (int) $reservation['order_id'] === $order) {
             return ['reservation' => $this->reservationView($reservation), 'card' => $this->view($card)];
         }
-        $this->usable($card);
+        if ($reservation['payment_confirmed_at'] === null) {
+            $this->usable($card);
+        }
         $existing = $this->db->row('SELECT id FROM ' . $this->db->table('reservations') . ' WHERE id_shop='
             . $this->shopId . ' AND order_id=' . $order);
         if ($existing !== null && $existing['id'] !== $reservation['id']) {
             throw new GiftCardException('order_already_redeemed', 'This order already has a gift card payment.', 409);
         }
-        if ($reservation['status'] !== 'held' || $reservation['expires_at'] <= $this->now()) {
+        if ($reservation['status'] !== 'held' || ($reservation['payment_confirmed_at'] === null && $reservation['expires_at'] <= $this->now())) {
             throw new GiftCardException('reservation_conflict', 'Reservation is no longer available for capture.', 409);
         }
         $reservation['status'] = 'captured';
@@ -301,6 +331,9 @@ final class Service
         [$card, $reservation] = $this->lockedReservation($data);
         if ($reservation['status'] === 'captured') {
             throw new GiftCardException('reservation_conflict', 'Refund a captured reservation instead of releasing it.', 409);
+        }
+        if ($reservation['payment_confirmed_at'] !== null) {
+            throw new GiftCardException('reservation_conflict', 'A verified payment must be settled or refunded.', 409);
         }
         if ($reservation['status'] === 'held') {
             $reason = self::text($data['reason'] ?? null, 'reason');
@@ -398,7 +431,7 @@ final class Service
     private function releaseExpired(array $card, string $actor): array
     {
         $rows = $this->db->rows('SELECT * FROM ' . $this->db->table('reservations') . ' WHERE id_shop=' . $this->shopId
-            . ' AND card_id=' . $this->db->quote($card['id']) . " AND status='held' AND expires_at<="
+            . ' AND card_id=' . $this->db->quote($card['id']) . " AND status='held' AND payment_confirmed_at IS NULL AND expires_at<="
             . $this->db->quote($this->now()) . ' FOR UPDATE');
         foreach ($rows as $row) {
             $row['status'] = 'released';
@@ -514,8 +547,9 @@ final class Service
             $row[$field] = (int) $row[$field];
         }
         $row['customer_id'] = $this->nullableInt($row['customer_id']);
+        $row['requested_cents'] = $this->nullableInt($row['requested_cents']);
         $row['order_id'] = $this->nullableInt($row['order_id']);
-        foreach (['expires_at', 'created_at', 'updated_at'] as $field) {
+        foreach (['expires_at', 'payment_confirmed_at', 'created_at', 'updated_at'] as $field) {
             $row[$field] = $this->iso($row[$field]);
         }
         return $row;

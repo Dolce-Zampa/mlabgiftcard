@@ -8,7 +8,7 @@ final class Api
         'cards' => ['GET', 'read'], 'card' => ['GET', 'read'], 'movements' => ['GET', 'read'],
         'reservation' => ['GET', 'read'], 'lookup' => ['POST', 'read'],
         'create' => ['POST', 'issue'], 'activate' => ['POST', 'issue'], 'reserve' => ['POST', 'spend'],
-        'capture' => ['POST', 'spend'], 'redeem' => ['POST', 'spend'], 'release' => ['POST', 'spend'],
+        'capture' => ['POST', 'spend'], 'protect' => ['POST', 'spend'], 'redeem' => ['POST', 'spend'], 'release' => ['POST', 'spend'],
         'refund' => ['POST', 'manage'], 'assign' => ['POST', 'manage'], 'status' => ['POST', 'manage'],
         'validity' => ['POST', 'manage'], 'adjust' => ['POST', 'manage'], 'resend' => ['POST', 'manage'],
         'maintenance' => ['POST', 'maintenance'],
@@ -78,7 +78,9 @@ final class Api
             $reservation = $action === 'capture' ? $this->service->reservation((string) ($data['reservation_id'] ?? ''))
                 : ['cart_id' => $data['cart_id'], 'customer_id' => $customer, 'amount_cents' => $data['amount_cents']];
             $currency = $action === 'capture' ? $this->service->card($reservation['card_id'])['currency'] : $data['currency'];
-            $this->platform->order(Service::integer($data['order_id'] ?? null, 'order_id'), $reservation, $currency);
+            $pendingStateId = $action === 'capture' && isset($data['pending_state_id'])
+                ? Service::integer($data['pending_state_id'], 'pending_state_id') : null;
+            $this->platform->order(Service::integer($data['order_id'] ?? null, 'order_id'), $reservation, $currency, $pendingStateId);
         }
         if ($action === 'maintenance') {
             return ['expired_reservations' => $this->service->expireReservations()];

@@ -10,6 +10,7 @@ Modulo autonomo per PrestaShop **9.0.x, 9.1.x e 9.2.x**, PHP 8.1+, OpenSSL, mbst
 - Ledger append-only con autore, motivo e saldi successivi. Ogni transizione e la relativa risposta idempotente sono salvate nella stessa transazione SQL.
 - Accesso diretto dal menu laterale **Vendite → GiftCard** (icona regalo) oppure da **Moduli → MLab Gift Card → Configura**: elenco, dettaglio, movimenti, operazioni, prodotti/tagli, chiavi/API e manutenzione.
 - Emissione dai prodotti configurati quando l’ordine entra in uno stato pagato; un codice per unità. L’email viene inviata al compratore, che può regalarla. Le card così emesse sono inizialmente al portatore.
+- I codici sono nel formato `GC-8DUE-28DF`; non usano `0`, `O`, `1` e `I`. Gli altri formati non vengono accettati.
 - Area cliente per vedere le proprie card e associarne una con il codice. Email HTML/testo IT/EN con coda, retry e lease per impedire invii simultanei.
 - API HTTPS con chiavi separate per negozio, permessi, revoca, limiti di frequenza e idempotenza.
 

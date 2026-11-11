@@ -116,6 +116,20 @@ final class CoreIntegrationTest extends TestCase
         $this->rejected('gift_card_purchase', fn() => $platform->order(21, $reservation, 'EUR'));
     }
 
+    public function testOnlyProtectedReservationCanBeCapturedForTheExpectedPendingState(): void
+    {
+        $platform = new CorePlatform($this->db, 1);
+        $reservation = ['cart_id' => 11, 'customer_id' => 42, 'amount_cents' => 5000, 'payment_confirmed_at' => null];
+        Order::$records[21]['current_state'] = 21;
+        $this->rejected('order_unpaid', fn() => $platform->order(21, $reservation, 'EUR', 21));
+        $reservation['payment_confirmed_at'] = '2026-01-01T00:00:00Z';
+        $this->rejected('order_unpaid', fn() => $platform->order(21, $reservation, 'EUR', 22));
+        $platform->order(21, $reservation, 'EUR', 21);
+        Configuration::$values['PS_OS_OUTOFSTOCK_UNPAID'] = 9;
+        Order::$records[21]['current_state'] = 9;
+        $platform->order(21, $reservation, 'EUR', 21);
+    }
+
     public function testUninstallAndReinstallKeepFinancialDataAndRevokeOldApiKeys(): void
     {
         $runtime = $this->module->runtime();

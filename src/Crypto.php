@@ -3,6 +3,8 @@ namespace Mlab\GiftCard;
 
 final class Crypto
 {
+    // 32 unambiguous characters: each random character carries five bits.
+    private const CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
     private string $key;
 
     public function __construct(string $masterKey)
@@ -46,10 +48,12 @@ final class Crypto
     public function codeHash(string $code): string
     {
         $code = strtoupper(preg_replace('/[\s-]+/', '', trim($code)));
-        if (str_starts_with($code, 'GC')) {
+        // Length distinguishes an optional prefix from an unprefixed new code
+        // whose first two randomly generated characters happen to be "GC".
+        if (strlen($code) === 10 && str_starts_with($code, 'GC')) {
             $code = substr($code, 2);
         }
-        if (!preg_match('/^[A-F0-9]{32}$/D', $code)) {
+        if (!preg_match('/^[2-9A-HJ-NP-Z]{8}$/D', $code)) {
             throw new GiftCardException('card_unavailable', 'Gift card unavailable.', 404);
         }
         return $this->hash('code:' . $code);
@@ -57,6 +61,10 @@ final class Crypto
 
     public function newCode(): string
     {
-        return 'GC-' . implode('-', str_split(strtoupper(bin2hex(random_bytes(16))), 8));
+        $code = '';
+        for ($i = 0; $i < 8; ++$i) {
+            $code .= self::CODE_ALPHABET[random_int(0, 31)];
+        }
+        return 'GC-' . implode('-', str_split($code, 4));
     }
 }
