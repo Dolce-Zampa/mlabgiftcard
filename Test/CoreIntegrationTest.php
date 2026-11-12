@@ -30,7 +30,7 @@ final class CoreIntegrationTest extends TestCase
         Cart::$records = [11 => ['id' => 11, 'id_shop' => 1, 'id_customer' => 42, 'id_currency' => 1]];
         Order::$records = [21 => ['id' => 21, 'id_shop' => 1, 'id_cart' => 11, 'id_customer' => 42,
             'id_currency' => 1, 'current_state' => 2, 'products' => [['id_order_detail' => 1, 'product_id' => 100,
-                'product_attribute_id' => 2, 'product_quantity' => 2]]]];
+                'product_attribute_id' => 2, 'product_reference' => 'SKU25GC29441', 'product_quantity' => 2]]]];
         Mail::$messages = []; Mail::$fail = false;
         PrestaShopLogger::$messages = [];
         $this->module = new mlabgiftcard();
@@ -73,17 +73,37 @@ final class CoreIntegrationTest extends TestCase
 
     public function testMailFailureRetriesSameCodesWithoutIssuingCreditAgain(): void
     {
+        if (!defined('_PS_ROOT_DIR_') && !class_exists('TCPDF')) {
+            $this->markTestSkipped('Set MLABGC_TEST_PS_ROOT to a PrestaShop installation to test PDF email attachments.');
+        }
         $this->mapping();
         $this->module->processOrder(21);
         Mail::$fail = true;
         $this->assertSame(0, $this->module->runtime()['delivery']->sendBatch());
         $failedCode = Mail::$messages[0][3]['{gift_card_code}'];
+        $this->assertSame('application/pdf', Mail::$messages[0][8]['mime']);
+        $this->assertStringStartsWith('%PDF-', Mail::$messages[0][8]['content']);
         $this->db->exec('UPDATE ' . $this->db->table('deliveries') . " SET next_attempt_at='2000-01-01 00:00:00'");
         Mail::$fail = false;
         $this->assertSame(2, $this->module->runtime()['delivery']->sendBatch());
         $this->assertContains($failedCode, array_map(fn($message) => $message[3]['{gift_card_code}'], array_slice(Mail::$messages, 2)));
         $this->assertSame(0, $this->module->runtime()['delivery']->sendBatch());
         $this->assertCount(2, $this->db->rows('SELECT * FROM ' . $this->db->table('cards')));
+    }
+
+    public function testMissingPdfKeepsOrderGiftCardsQueuedWithoutSendingAnIncompleteEmail(): void
+    {
+        $this->mapping();
+        Order::$records[21]['products'][0]['product_reference'] = 'UNKNOWN';
+        $this->module->processOrder(21);
+        $this->assertSame(0, $this->module->runtime()['delivery']->sendBatch());
+        $this->assertSame([], Mail::$messages);
+        $jobs = $this->db->rows('SELECT status, attempts FROM ' . $this->db->table('deliveries'));
+        $this->assertCount(2, $jobs);
+        foreach ($jobs as $job) {
+            $this->assertSame('pending', $job['status']);
+            $this->assertSame(1, (int) $job['attempts']);
+        }
     }
 
     public function testCoreGuardRejectsForeignCustomersCurrenciesCartsAndGiftCardPurchases(): void

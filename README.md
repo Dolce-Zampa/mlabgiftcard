@@ -12,6 +12,7 @@ Modulo autonomo per PrestaShop **9.0.x, 9.1.x e 9.2.x**, PHP 8.1+, OpenSSL, mbst
 - Emissione dai prodotti configurati quando l’ordine entra in uno stato pagato; un codice per unità. L’email viene inviata al compratore, che può regalarla. Le card così emesse sono inizialmente al portatore.
 - I codici sono nel formato `GC-8DUE-28DF`; non usano `0`, `O`, `1` e `I`. Gli altri formati non vengono accettati.
 - Area cliente per vedere le proprie card e associarne una con il codice. Email HTML/testo IT/EN con coda, retry e lease per impedire invii simultanei.
+- Per gli acquisti da prodotto con combinazione, l'email include un PDF stampabile con il codice, il valore e campi compilabili per destinatario e dedica.
 - API HTTPS con chiavi separate per negozio, permessi, revoca, limiti di frequenza e idempotenza.
 
 ## Installazione
@@ -29,6 +30,12 @@ Una corrispondenza con combinazione `0` copre il prodotto semplice o tutte le su
 Caricare i file aggiornati e premere **Aggiorna** in Gestione moduli: lo script di upgrade aggiunge la voce **GiftCard** senza modificare saldi, configurazione o chiavi API. Ricaricare il back office per aggiornare il menu. Non occorre disinstallare o reimpostare il modulo. La voce segue l’abilitazione del modulo; la disinstallazione la rimuove tramite il ciclo di vita standard di PrestaShop. Per profili dipendente personalizzati, concedere la lettura della pagina **GiftCard** in **Parametri avanzati → Team → Permessi** e l’autorizzazione a configurare **MLab Gift Card**. Il collegamento conserva il contesto multistore corrente e usa il token amministrativo generato dal core.
 
 Le card acquistate vengono emesse una sola volta da `actionValidateOrderAfter` / `actionOrderStatusPostUpdate`. Un hook fallito produce un log privo del codice; usare **Riconcilia ordine** per ripetere l’emissione. Un ordine di emissione annullato, rimborsato o in errore blocca le sue card; un eventuale credito già utilizzato richiede riconciliazione. Il riaccredito di un ordine riscattato passa invece dall’operazione `refund`, con importo e riferimento espliciti. Il ritorno dell’ordine allo stato pagato non sblocca automaticamente le card.
+
+### Allegati PDF delle gift card acquistate
+
+Il codice viene inserito in memoria nel PDF identificato dallo SKU della combinazione salvato nella riga d'ordine. I modelli A4 si trovano in `pdf-templates/<SKU>.pdf`; `pdf-templates/catalog.json` associa ciascuno SKU a importo iniziale in centesimi e valuta. Il valore stampato nel PDF, il catalogo e l'importo configurato per la combinazione devono coincidere. Gli SKU previsti coprono le 15 varianti Dolce & Zampa da 20, 50, 70, 100 e 150 EUR. Per aggiungere una variante, fornire un modello compatibile con la stessa impaginazione A4 e aggiornare il catalogo.
+
+Il modulo usa TCPDF fornito da PrestaShop e include FPDI con relativa licenza, senza dipendere da programmi esterni o salvare il PDF compilato su disco. Se ordine, SKU, modello o importo non sono validi, l'invio rimane in coda per un nuovo tentativo: correggere la configurazione e rieseguire la manutenzione. Le card create manualmente o via API senza una riga d'ordine continuano a ricevere la normale email senza allegato. La coda è almeno una volta: un reinvio può inviare di nuovo lo stesso codice.
 
 ## Integrazione con PsWebService
 
