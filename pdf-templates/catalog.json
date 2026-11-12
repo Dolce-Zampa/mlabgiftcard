@@ -1,0 +1,62 @@
+{
+  "SKU25GC29431": {
+    "amount_cents": 2000,
+    "currency": "EUR"
+  },
+  "SKU25GC29441": {
+    "amount_cents": 5000,
+    "currency": "EUR"
+  },
+  "SKU25GC29451": {
+    "amount_cents": 10000,
+    "currency": "EUR"
+  },
+  "SKU25GC29461": {
+    "amount_cents": 15000,
+    "currency": "EUR"
+  },
+  "SKU25GC29471": {
+    "amount_cents": 7000,
+    "currency": "EUR"
+  },
+  "SKU25GC29481": {
+    "amount_cents": 2000,
+    "currency": "EUR"
+  },
+  "SKU25GC29491": {
+    "amount_cents": 5000,
+    "currency": "EUR"
+  },
+  "SKU25GC29501": {
+    "amount_cents": 10000,
+    "currency": "EUR"
+  },
+  "SKU25GC29511": {
+    "amount_cents": 15000,
+    "currency": "EUR"
+  },
+  "SKU25GC29521": {
+    "amount_cents": 7000,
+    "currency": "EUR"
+  },
+  "SKU25GC29531": {
+    "amount_cents": 2000,
+    "currency": "EUR"
+  },
+  "SKU25GC29541": {
+    "amount_cents": 5000,
+    "currency": "EUR"
+  },
+  "SKU25GC29551": {
+    "amount_cents": 10000,
+    "currency": "EUR"
+  },
+  "SKU25GC29561": {
+    "amount_cents": 15000,
+    "currency": "EUR"
+  },
+  "SKU25GC29571": {
+    "amount_cents": 7000,
+    "currency": "EUR"
+  }
+}

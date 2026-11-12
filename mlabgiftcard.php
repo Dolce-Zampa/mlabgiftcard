@@ -22,7 +22,7 @@ class mlabgiftcard extends Module
     {
         $this->name = 'mlabgiftcard';
         $this->tab = 'payments_gateways';
-        $this->version = '1.0.2';
+        $this->version = '1.0.3';
         $this->author = 'MlabFactory';
         $this->need_instance = 0;
         $this->bootstrap = true;

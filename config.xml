@@ -2,7 +2,7 @@
 <module>
   <name>mlabgiftcard</name>
   <displayName><![CDATA[MLab Gift Card]]></displayName>
-  <version><![CDATA[1.0.2]]></version>
+  <version><![CDATA[1.0.3]]></version>
   <description><![CDATA[Gift card balances, customer assignment, audit ledger and integration APIs.]]></description>
   <author><![CDATA[MlabFactory]]></author>
   <tab><![CDATA[payments_gateways]]></tab>

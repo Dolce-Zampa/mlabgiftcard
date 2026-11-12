@@ -22,14 +22,16 @@ final class Delivery
             try {
                 if ($eligible) {
                     $language = (int) \Configuration::get('PS_LANG_DEFAULT', null, null, $this->shopId);
+                    $code = $this->crypto->decrypt($card['code_ciphertext']);
+                    $attachment = (new GiftCardPdf(dirname(__DIR__), $this->shopId))->attachment($card, $code);
                     $vars = [
                         '{recipient_name}' => htmlspecialchars($card['recipient_name'] ?? '', ENT_QUOTES, 'UTF-8'),
-                        '{gift_card_code}' => $this->crypto->decrypt($card['code_ciphertext']),
+                        '{gift_card_code}' => $code,
                         '{gift_card_amount}' => number_format((int) $card['initial_cents'] / 100, 2, ',', '.') . ' ' . $card['currency'],
                         '{gift_card_expiry}' => $card['expires_at'] === null ? 'Senza scadenza / No expiry' : $card['expires_at'] . ' UTC',
                     ];
                     $ok = (bool) \Mail::Send($language, 'giftcard', 'Gift Card', $vars,
-                        $card['recipient_email'], $card['recipient_name'], null, null, null, null,
+                        $card['recipient_email'], $card['recipient_name'], null, null, $attachment, null,
                         dirname(__DIR__) . '/mails/', false, $this->shopId);
                 }
             } catch (\Throwable $error) {

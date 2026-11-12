@@ -1,5 +1,8 @@
 <?php
 define('_PS_VERSION_', '9.0.0');
+if (getenv('MLABGC_TEST_PS_ROOT')) {
+    define('_PS_ROOT_DIR_', (string) getenv('MLABGC_TEST_PS_ROOT'));
+}
 require_once dirname(__DIR__) . '/bootstrap.php';
 
 final class GiftCardTestDb
